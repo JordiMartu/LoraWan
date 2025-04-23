@@ -153,6 +153,7 @@ allow_anonymous true
 ```
 
 #### ✅ `visualizador.sh`
+```
 #!/bin/bash
 # === CONFIGURACIÓN DE LOG ===
 mkdir -p ./chirpstackv3/logs
@@ -299,9 +300,7 @@ done
 
 echo "---------------------------------------------------------------------"
 echo "Monitor MQTT terminado."
-
-
-
+```
 
 #### ✅ `decoder_milesight_em300.js` (Decoder personalizado EM300-TH)
 ```javascript
