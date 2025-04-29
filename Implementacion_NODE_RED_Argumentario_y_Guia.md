@@ -148,6 +148,38 @@ Node-RED permitirá:
 
 ---
 
+## 6. Guía de actuación para implementación de Node-RED
+
+### 6.1 ¿Dónde debe instalarse Node-RED?
+
+- **Recomendado**: En el **host donde se encuentra Mosquitto** (el broker MQTT), porque Node-RED se suscribirá directamente a los tópicos MQTT de ChirpStack.
+- **Alternativas**: Puede estar también en un contenedor separado o máquina virtual, siempre que tenga acceso de red al broker MQTT.
+
+### 6.2 ¿Node-RED sustituye algo?
+
+- ❌ **No reemplaza ChirpStack, Mosquitto, ni Telegraf**.
+- ✅ **Se inserta entre Mosquitto y Telegraf como capa de procesamiento y normalización.**
+
+### 6.3 Pasos recomendados
+
+1. **Validar que Mosquitto publica correctamente todos los datos**.
+2. **Instalar Node-RED en un host con acceso a Mosquitto**.
+3. **Crear flujo básico Node-RED**:
+   - `mqtt in` ➔ desanidar payload ➔ renombrar ➔ `mqtt out`
+4. **Reconfigurar Telegraf para leer del nuevo tópico MQTT limpio**.
+5. **Confirmar que los campos como `_leakage_status` ya aparecen en Influx.**
+6. **Crear dashboards y paneles de visualización/alertas en Grafana.**
+
+### 6.4 Validaciones clave en cada paso
+
+- ¿MQTT original está accesible? (usar `mosquitto_sub`)
+- ¿Node-RED transforma correctamente el payload? (ver nodos `debug`)
+- ¿El nuevo JSON plano contiene los campos esperados? (`_leakage_status`, etc.)
+- ¿Telegraf los recibe? (consultas de verificación en InfluxDB)
+- ¿Grafana los muestra correctamente? (dashboards funcionales)
+
+---
+
 ## Conclusión
 
 La implementación de Node-RED en la arquitectura actual no solo resuelve las limitaciones identificadas, sino que también proporciona una base más sólida, flexible y escalable para el crecimiento del sistema IoT-Data-Visualización a futuro. Evita errores de parsing, simplifica el trabajo en Telegraf y garantiza que todos los datos críticos puedan ser registrados correctamente y usados por Grafana o cualquier otra herramienta.
