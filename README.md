@@ -78,12 +78,14 @@ pg_dump -U networkserver chirpstack_ns > backups/db/chirpstack_ns.sql
 - ChirpStack accesible vía Web UI en `http://localhost:8080`
 - Scripts y servicios operativos y verificados tras reinicio
 
+- Integración externa con InfluxDB + Grafana - Realizado
+- Crear decodificadores de payload en ChirpStack - Realizado
+
 ---
 
 ## 📌 Próximos pasos sugeridos
 
-- Implementar integración externa con InfluxDB + Grafana
-- Crear decodificadores de payload en ChirpStack
+- Necesitamos capturar en influx/grafana los valores JSON con tags, datos de sensores (open,clore,leak,etc) y no es posible sin Implementar NODE-RED.
 - Establecer un mecanismo de backup automático
 - Activar monitorización (con `monit` u otra solución)
 
