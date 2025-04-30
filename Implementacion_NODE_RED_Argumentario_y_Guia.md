@@ -432,3 +432,100 @@ Por defecto:
 **Importante**: PM2 garantizará que, incluso tras reinicio del sistema, el servicio de Node-RED vuelva a levantarse con todos los flujos intactos.
 
 ---
+
+## 14. Recomendaciones de estructura óptima para visualización y almacenamiento
+
+A continuación se detallan una serie de mejoras recomendadas para dejar los datos publicados por Node-RED en una estructura ideal, tanto para ser almacenados en InfluxDB como para ser visualizados eficientemente en Grafana.
+
+Estas recomendaciones buscan minimizar los ajustes manuales en paneles y facilitar el uso de variables dinámicas en visualizaciones y alertas.
+
+### 14.1 Desanidar completamente `object` y `tags`
+
+Node-RED debe extraer tanto el contenido de `payload.object` como de `payload.tags` y moverlo al nivel raíz del `msg.payload`, eliminando la anidación.
+
+Ejemplo de transformación:
+
+```json
+"tags": {
+  "Marca": "Milesight",
+  "Ubicacion": "Edificio"
+}
+```
+
+➡️ Se convierte en:
+
+```json
+"Marca": "Milesight",
+"Ubicacion": "Edificio"
+```
+
+Esto permite que Telegraf los registre como `tag_keys` fácilmente.
+
+### 14.2 Usar `deviceName` como identificador humano en Grafana
+
+Evitar usar `devEUI` o `topic` como selector en paneles. Se recomienda siempre incluir `deviceName` como tag y variable base en dashboards de Grafana.
+
+Esto facilita la legibilidad y navegación por múltiples sensores.
+
+### 14.3 Renombrar campos con unidades explícitas
+
+Para mejorar la comprensión y claridad de datos:
+
+- `temperature` → `temperature_c`
+- `humidity` → `humidity_pct`
+
+Esto ayuda a que en Grafana no sea necesario adivinar o aclarar unidades manualmente.
+
+### 14.4 Eliminar duplicados innecesarios
+
+Asegurarse de que no se generen campos duplicados como:
+
+- `leakage_status` y `_leakage_status`
+
+Seleccionar un único nombre y mantener consistencia en todos los nodos.
+
+### 14.5 Garantizar presencia de campos opcionales como `battery`, `status`, etc.
+
+Incluso si el sensor no envía un valor, se recomienda agregar explícitamente estos campos con `null` si no existen, para mantener coherencia de estructura:
+
+```javascript
+if (decoded.battery !== undefined) result.battery = decoded.battery;
+else result.battery = null;
+```
+
+Esto facilita el uso de paneles `stat`, `gauge`, `threshold` o `last()` sin errores por ausencia de campo.
+
+### 14.6 Considerar `history` o datos acumulados
+
+Algunos nodos (como EM300-ZDL) pueden enviar bloques `history` cuando se reconectan. Este campo suele ser un array de puntos con timestamp, temperatura, humedad, y estado.
+
+Ejemplo:
+
+```json
+"history": [
+  { "timestamp": 1665561758, "temperature": 27.2, "humidity": 46.5, "leakage_status": "leak" }
+]
+```
+
+Se recomienda separar estos datos en otro flujo o función de Node-RED si se desea almacenarlos, o descartarlos si no se necesitan para análisis.
+
+---
+
+## 15. Validación transversal con múltiples dispositivos
+
+Se ha verificado el correcto funcionamiento de la lógica de desanidado, renombrado, estandarización y limpieza de datos aplicados en Node-RED utilizando datos reales de sensores EM300-TH, EM310, EM300-ZDL y EM300-SLD.
+
+### Dispositivos y ejemplos analizados
+- `em300-Id1-Zone1` a `Zone4` con sensores de temperatura y humedad.
+- `em310-UDL` sin `object`, para validar el fallback seguro.
+- `em300-ZDL-Id1-Zone2`, `em300-SLD-Id1-Zone1` con campos de `leakage_status` y `tags`.
+
+### Comprobaciones realizadas:
+- ✅ Desanidado correcto de `object` y `tags`.
+- ✅ Renombrado a `temperature_c`, `humidity_pct`.
+- ✅ Inclusión de campos opcionales con `null` cuando no están presentes.
+- ✅ Eliminación de duplicados como `_leakage_status`.
+- ✅ Formato consistente y limpio en todos los mensajes MQTT publicados a `nodered/uplink/processed`.
+
+Esta validación asegura que el flujo Node-RED es compatible con toda la variedad de sensores desplegados, y que está listo para ser consumido sin ajustes adicionales por Telegraf e InfluxDB.
+
