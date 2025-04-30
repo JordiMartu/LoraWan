@@ -561,6 +561,7 @@ Una vez transformados y desanidados los datos correctamente en Node-RED, se reco
   token = "<REEMPLAZAR_CON_TOKEN_REAL>"
   organization = "IoT-Lora"
   bucket = "iot-datos"
+```
 
 Notas importantes:
 
@@ -573,22 +574,25 @@ Notas importantes:
 ## Reinicio y validación del servicio Telegraf
 
 Una vez guardado el archivo lorawan.conf, es necesario reiniciar Telegraf para aplicar los cambios:
+
 ### 1. Reiniciar Telegraf
 
 sudo systemctl restart telegraf
 
-2. Verificar el estado del servicio
+### 2. Verificar el estado del servicio
 
 sudo systemctl status telegraf
 
 Debe indicar que el servicio está “activo (running)” sin errores.
-3. Verificar si está recibiendo datos
+
+### 3. Verificar si está recibiendo datos
 
 journalctl -u telegraf -f
 
 Esto muestra en tiempo real los mensajes que Telegraf está procesando. Si aparecen tramas del tópico nodered/uplink/processed, la integración ha sido exitosa.
 
-✅ Consulta básica para verificar datos entrantes
+
+## ✅ Consulta básica para verificar datos entrantes
 
 Ejecuta en el host de InfluxDB:
 
@@ -614,4 +618,6 @@ from(bucket: "iot-datos")
         deviceName
 
         Marca, Modelo, Ubicacion
+
+        
 
