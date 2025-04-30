@@ -180,10 +180,179 @@ Node-RED permitirá:
 
 ---
 
+## 7. Visualización del mensaje final en Node-RED
 
-# Implementacion_NODE_RED_Argumentario_y_Guia.md
+Para facilitar la validación de los datos que están siendo reenviados por Node-RED hacia el nuevo tópico limpio, se recomienda añadir un nodo `debug` conectado a la salida del nodo `function` (desanidar y aplanar).
 
-... [contenido previo intacto] ...
+### 7.1 Propósito del nodo debug
+
+- Visualizar en tiempo real el objeto final aplanado.
+- Confirmar que `_leakage_status`, `humidity`, `temperature` y otros campos están correctamente expuestos al nivel raíz de `msg.payload`.
+- Verificar el formato final antes de que Telegraf lo consuma.
+
+### 7.2 Cómo añadirlo
+
+1. En la interfaz de Node-RED, desde la paleta izquierda, arrastra un nodo `debug`.
+2. Conéctalo a la salida del nodo `function`.
+3. Configura el nodo para mostrar `msg.payload`.
+4. Haz clic en `Deploy`.
+5. Abre el panel lateral derecho para visualizar los resultados en tiempo real.
+
+Esto facilita identificar cualquier error de estructura o campo inesperado y acelerar el ajuste del flujo antes de pasar a su integración definitiva con Telegraf + InfluxDB.
+
+---
+
+## 8. Ejecución de Node-RED como servicio en segundo plano
+
+Por defecto, si se ejecuta Node-RED desde el terminal con `node-red`, el servicio se detendrá al cerrar la terminal. Para dejarlo funcionando como un servicio del sistema, se recomienda utilizar `pm2`.
+
+### 8.1 Instalar y configurar `pm2`
+
+```bash
+sudo npm install -g pm2
+pm2 start $(which node-red)
+pm2 save
+pm2 startup
+```
+
+Esto:
+
+- Lanza Node-RED como proceso en segundo plano.
+- Garantiza que se reinicie automáticamente tras un reinicio del sistema.
+- Permite acceder a la interfaz en `http://localhost:1880` incluso sin sesión de terminal activa.
+
+---
+
+## 9. Diagnóstico visual y solución de errores de conexión MQTT en Node-RED
+
+Durante la implementación del flujo Node-RED, puede aparecer el mensaje de error:
+
+```
+"missing broker configuration"
+```
+
+Esto indica que alguno de los nodos MQTT (IN o OUT) **no tiene correctamente asignado un broker** o que este **no está bien definido**.
+
+### 9.1 Cómo identificarlo visualmente
+
+- Los nodos `mqtt in` o `mqtt out` muestran un **círculo azul o sin color** en su borde izquierdo.
+- Si el broker está correctamente configurado, ese círculo será **🟢 verde**.
+
+### 9.2 Pasos para resolverlo
+
+1. Haz doble clic en el nodo `MQTT IN` o `MQTT OUT`.
+2. En el campo **Servidor**, selecciona o crea uno nuevo haciendo clic en el lápiz ✏️.
+3. Asegúrate de los siguientes datos:
+   - **Servidor**: `localhost`
+   - **Puerto**: `1883`
+   - **Sin TLS, sin usuario/contraseña** si tu Mosquitto no lo requiere
+4. Pulsa **“Añadir”** o **“Actualizar”**, luego **“Hecho”**.
+5. Repite para cada nodo MQTT involucrado.
+6. Finalmente, haz clic en **“Deploy”** para aplicar los cambios.
+
+Cuando está correctamente conectado, el nodo mostrará el **estado verde** y comenzará a recibir mensajes si el broker MQTT está activo.
+
+---
+
+## 10. Configuración técnica final validada en Node-RED
+
+### 10.1 Estructura del flujo activo
+
+```
+[mqtt in] → [Desanidar y aplanar] → [mqtt out]
+                           ↘
+                        [debug 1]
+```
+
+### 10.2 Configuración del nodo MQTT IN
+
+- **Servidor**: `MOSQUITO MQTT LOCAL`
+- **Tópico**: `application/+/device/+/event/up`
+- **QoS (CdS)**: `2`
+- **Salida**: `auto-detectar (objeto JSON, texto o buffer)`
+
+### 10.3 Configuración del broker MQTT (MOSQUITO MQTT LOCAL)
+
+- **Servidor**: `localhost`
+- **Puerto**: `1883`
+- **Conectar automáticamente**: ✅
+- **Usar sesión limpia**: ✅
+- **TLS**: ❌ No habilitado
+
+### 10.4 Configuración del nodo MQTT OUT
+
+- **Servidor**: `MOSQUITO MQTT LOCAL`
+- **Tópico**: `nodered/uplink/processed`
+- **QoS**: por defecto (sin especificar)
+- **Retener**: ❌ (no marcado)
+
+### 10.5 Función en el nodo “Desanidar y aplanar”
+
+```javascript
+var payload = msg.payload;
+var objectData = payload.object || {};
+delete payload.object;
+
+for (var key in objectData) {
+    payload[key] = objectData[key];
+}
+
+msg.payload = payload;
+return msg;
+```
+
+### 10.6 Ejemplo de salida observada en nodo debug
+
+```json
+{
+  "applicationID": "1",
+  "applicationName": "app-em300",
+  "deviceName": "em300-ZDL-Id1-Zone2",
+  "deviceProfileName": "profile-EM300-SLD/ZDL-868M",
+  "deviceProfileID": "721d249d-8d14-4d2c-9932-0cf06e7b30a3",
+  "devEUI": "24e124136d446138",
+  "rxInfo": [...],
+  "txInfo": {...},
+  "adr": true,
+  "fCnt": 1909,
+  "fPort": 85,
+  "data": "A2f0AARoXAUAAA==",
+  "_leakage_status": "normal",
+  "humidity": 46,
+  "leakage_status": "normal",
+  "temperature": 24.4
+}
+```
+
+---
+
+## 11. Validación de publicación MQTT OUT (resultado final esperado)
+
+Al ejecutar:
+
+```bash
+mosquitto_sub -t 'nodered/uplink/processed' -v
+```
+
+Se observará que cada mensaje publicado por Node-RED contiene ahora el JSON desanidado, ideal para ser capturado directamente por Telegraf:
+
+```json
+nodered/uplink/processed {
+  "applicationID": "1",
+  "deviceName": "em300-SLD-Id1-Zone1",
+  "humidity": 63.5,
+  "temperature": 17.4,
+  "leakage_status": "normal",
+  "_leakage_status": "normal",
+  "tags": {
+    "Marca": "Milesight",
+    "Modelo": "EM300-SLD-868M",
+    "Ubicacion": "Edificio"
+  }
+}
+```
+
+Esto confirma la funcionalidad completa del flujo desde entrada MQTT hasta salida procesada para InfluxDB.
 
 ---
 
