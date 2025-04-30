@@ -529,3 +529,89 @@ Se ha verificado el correcto funcionamiento de la lógica de desanidado, renombr
 
 Esta validación asegura que el flujo Node-RED es compatible con toda la variedad de sensores desplegados, y que está listo para ser consumido sin ajustes adicionales por Telegraf e InfluxDB.
 
+
+## 16. Configuración final del input MQTT en Telegraf
+
+Una vez transformados y desanidados los datos correctamente en Node-RED, se recomienda adaptar la configuración de entrada MQTT en Telegraf para consumir exclusivamente del canal limpio y estructurado.
+
+### Contenido recomendado para `lorawan.conf` en el host InfluxDB:
+
+```toml
+[[inputs.mqtt_consumer]]
+  servers = ["tcp://192.168.212.231:1883"]
+  topics = ["nodered/uplink/processed"]
+  client_id = "telegraf-nodered-app"
+  data_format = "json"
+  name_override = "uplink_lora"
+
+  tag_keys = [
+    "devEUI",
+    "deviceName",
+    "applicationName",
+    "Marca",
+    "Modelo",
+    "Ubicacion"
+  ]
+
+  qos = 0
+  persistent_session = true
+
+[[outputs.influxdb_v2]]
+  urls = ["http://localhost:8086"]
+  token = "<REEMPLAZAR_CON_TOKEN_REAL>"
+  organization = "IoT-Lora"
+  bucket = "iot-datos"
+
+Notas importantes:
+
+    Si se añaden nuevos tags personalizados desde ChirpStack (como Planta, Zona, TipoEquipo), será necesario añadir esos nombres también a la lista tag_keys[] en este archivo.
+
+    Es recomendable mantener esta lista sincronizada con la estructura que genera Node-RED tras desanidar tags.
+
+    Puedes automatizar esta lógica en el flujo de Node-RED si se desea mantener un diseño dinámico.
+
+## Reinicio y validación del servicio Telegraf
+
+Una vez guardado el archivo lorawan.conf, es necesario reiniciar Telegraf para aplicar los cambios:
+### 1. Reiniciar Telegraf
+
+sudo systemctl restart telegraf
+
+2. Verificar el estado del servicio
+
+sudo systemctl status telegraf
+
+Debe indicar que el servicio está “activo (running)” sin errores.
+3. Verificar si está recibiendo datos
+
+journalctl -u telegraf -f
+
+Esto muestra en tiempo real los mensajes que Telegraf está procesando. Si aparecen tramas del tópico nodered/uplink/processed, la integración ha sido exitosa.
+
+✅ Consulta básica para verificar datos entrantes
+
+Ejecuta en el host de InfluxDB:
+
+influx query '
+from(bucket: "iot-datos")
+  |> range(start: -10m)
+  |> filter(fn: (r) => r._measurement == "uplink_lora")
+  |> limit(n: 5)
+'
+
+🔍 ¿Qué deberías ver?
+
+    Al menos 5 resultados con campos como:
+
+        humidity_pct
+
+        temperature_c
+
+        leakage_status, battery, etc.
+
+    Y tags como:
+
+        deviceName
+
+        Marca, Modelo, Ubicacion
+
