@@ -1,5 +1,84 @@
 # Implementacion_NODE_RED_Argumentario_y_Guia.md
 
+# Descripcion_Argumentario_General_IoT_Lorawan_Implementacion.md
+
+## Introducción general
+
+Este documento constituye un compendio narrativo y técnico de la implementación de una arquitectura de adquisición y tratamiento de datos IoT basada en la tecnología LoRaWAN, con el objetivo de dotar al sistema de mayor flexibilidad, claridad estructural de datos, y posibilidades de visualización, alerta y trazabilidad a través de herramientas como Node-RED, InfluxDB, Telegraf y Grafana. La necesidad de este rediseño e integración nace del contexto de despliegue real con sensores Milesight EM300/EM310 y del uso de ChirpStack como Network Server LoRaWAN.
+
+La iniciativa parte de un sistema ya funcional pero limitado en cuanto a la captación y representación de datos estructurados o anidados que no eran correctamente gestionados por Telegraf. La falta de soporte de Telegraf para estructuras anidadas JSON y su imposibilidad de acceder dinámicamente a campos complejos como `leakage_status`, `open_close`, `battery` o `tags`, motivaron una revisión profunda del sistema. Este documento resume el proceso completo de análisis, diseño, implementación, validación y cierre de la solución definitiva.
+
+---
+
+## Objetivos estratégicos del proyecto
+
+- Permitir la **visualización coherente** de los datos complejos enviados por los sensores, incluyendo campos anidados y estructuras personalizadas por el usuario.
+- Centralizar y homogeneizar la entrada de datos a **InfluxDB** mediante Telegraf.
+- Transformar dinámicamente los datos MQTT mediante **Node-RED**, como middleware entre ChirpStack y el stack de almacenamiento y visualización.
+- Implementar un flujo escalable, mantenible y fácilmente integrable para nuevos sensores y escenarios.
+- Garantizar trazabilidad y validación completa desde el origen (sensor MQTT) hasta el destino (panel en Grafana).
+
+---
+
+## Fases de trabajo y validaciones
+
+### 1. Análisis inicial del sistema existente
+Se identificó que Telegraf, en su configuración habitual, era incapaz de desanidar los campos JSON más allá del primer nivel. Esto impedía acceder a:
+- Campos como `object.leakage_status`, `object.open_close`, `object.temperature`, etc.
+- Campos personalizados definidos en ChirpStack bajo `tags`, como `Ubicacion`, `Modelo`, `Marca`.
+
+### 2. Validación parcial de integración en Grafana
+Se probó mediante queries específicas y la creación de variables en Grafana acceder a estos campos, pero se comprobó que únicamente los valores planos eran visibles. Se intentó usar `tag_keys`, `field_keys` y `schema.*` sin éxito para acceder a los niveles anidados.
+
+### 3. Propuesta y prueba de Node-RED como middleware
+Se decidió intercalar Node-RED entre MQTT y Telegraf, con funciones específicas para:
+- Desanidar `object`, `tags`, `rxInfo` y `txInfo`.
+- Aplanar los datos en una estructura plana JSON.
+- Publicar el nuevo mensaje en un topic MQTT propio: `nodered/uplink/processed`.
+
+Esto permitió una transformación completa con posibilidad de usar nombres amigables (`temperature_c`, `humidity_pct`, etc.), eliminar duplicados, y aplicar control de calidad sobre el mensaje.
+
+### 4. Rediseño del archivo `lorawan.conf` de Telegraf
+Una vez que los mensajes ya eran planos y estructurados, se adaptó Telegraf para escuchar el nuevo topic y extraer los tags requeridos. Esto se tradujo en:
+- Cambio del topic a `nodered/uplink/processed`.
+- Inclusión de nuevas claves en `tag_keys`, sincronizadas con las que publica Node-RED.
+- Validación de la estructura en Influx mediante comandos de verificación (`influx query`).
+
+### 5. Implementación persistente y puesta en producción
+Se configuró Node-RED para arrancar automáticamente como servicio, y se integró el flujo final en el entorno. La validación incluyó:
+- Comparativa entre tramas originales y procesadas.
+- Inspección directa de los datos en Influx.
+- Revisión de comportamiento ante desconexiones, múltiples gateways y carga sostenida.
+
+---
+
+## Tareas realizadas y resultados
+
+| Tarea                                  | Resultado alcanzado |
+|----------------------------------------|----------------------|
+| Identificación de limitaciones         | ✅                   |
+| Diseño de flujo Node-RED               | ✅                   |
+| Reconfiguración Telegraf               | ✅                   |
+| Validación tramas MQTT original vs Node-RED | ✅           |
+| Captura y almacenamiento en Influx     | ✅                   |
+| Inserción de tags personalizados       | ✅                   |
+| Persistencia de servicios              | ✅                   |
+| Estandarización de estructuras         | ✅                   |
+
+---
+
+## Consideraciones y recomendaciones futuras
+
+- Se recomienda mantener un registro de todos los `tags` utilizados, y sincronizar su inclusión en Telegraf si son añadidos nuevos.
+- Puede incluirse lógica de detección de históricos en Node-RED para evitar duplicaciones o malformaciones en los datos.
+- Grafana puede aprovechar esta nueva estructura para generar dashboards más dinámicos, con filtros por `Ubicacion`, `Marca`, `Modelo` y otros.
+- Automatizar backups de flows y configuración.
+
+---
+
+Este documento sirve como descripción ejecutiva y técnica para auditar, presentar o documentar el ciclo completo de implantación, validación y puesta en marcha del nuevo flujo IoT mediante Node-RED. La lógica construida es adaptable y escalable para nuevos dispositivos, campos o aplicaciones futuras.
+
+
 ## 1. Estado actual del sistema
 
 ### Arquitectura
