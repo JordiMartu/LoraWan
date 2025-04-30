@@ -342,6 +342,8 @@ Cuando está correctamente conectado, el nodo mostrará el **estado verde** y co
                            ↘
                         [debug 1]
 ```
+![imagen](https://github.com/user-attachments/assets/193414c3-39c4-45bf-8475-cd8679d33ecf)
+
 
 ### 10.2 Configuración del nodo MQTT IN
 
